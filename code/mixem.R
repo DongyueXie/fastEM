@@ -13,16 +13,16 @@ mixem <- function (L, x0, numiter = 1000, e = 1e-15) {
 
   # This variable is used to keep track of the algorithm's progress;
   # it stores the value of the objective at each iteration.
-  value <- rep(0,numiter)
+  value <- c(mixobjective(L,x,e),rep(0,numiter))
 
   # Iterate the E and M steps.
   for (i in 1:numiter) {
 
     # Update the solution.
     x <- mixem.update(L,x,e)
-    
+
     # Record the algorithm's progress.
-    value[i] <- mixobjective(L,x,e)
+    value[i+1] <- mixobjective(L,x,e)
   }
 
   # Return the estimate of the solution ("x") and the value of the

@@ -4,11 +4,11 @@ mr_ash <- function (X, y, b0, s, s0, w, numiter = 100) {
 
   # Get the initial estimates of the posterior mean regression coefficients.
   b <- b0
-  
+
   # This variable is used to keep track of the algorithm's progress;
   # it stores the value of the objective (the variational lower bound,
   # or "ELBO") at each iteration.
-  value <- rep(0,numiter)
+  value <- c(mr_ash_elbo(X,y,b,s,s0,w),rep(0,numiter))
 
   # Iterate the co-ordinate ascent steps.
   for (iter in 1:numiter) {
@@ -17,7 +17,7 @@ mr_ash <- function (X, y, b0, s, s0, w, numiter = 100) {
     b <- mr_ash_update(X,y,b,s,s0,w)
 
     # Record the algorithm's progress.
-    value[iter] <- mr_ash_elbo(X,y,b,s,s0,w)
+    value[iter + 1] <- mr_ash_elbo(X,y,b,s,s0,w)
   }
 
   # Return the estimate of the regression coefficients ("b") and the
@@ -78,7 +78,7 @@ mr_ash_update <- function (X, y, b, s, s0, w) {
   # components (k).
   p <- length(b)
   k <- length(w)
-  
+
   # Precompute a couple vector quantities used in the co-ordinate
   # ascent updates below.
   d  <- colSums(X^2)
@@ -109,7 +109,7 @@ mr_ash_update <- function (X, y, b, s, s0, w) {
     # posterior mean coefficients.
     xr <- xr + (r[i] - r0)*X[,i]
   }
-  
+
   return(b)
 }
 
