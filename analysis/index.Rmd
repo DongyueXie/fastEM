@@ -10,6 +10,7 @@ Compare turboEM and daarem on GMM and regression problems:
 
 * [GMM](fastEM_GMM.html)
 * [Linear Regression](fastEM_regression.html)
+* [Linear Regression estimate prior](fastEM_regression_prior.html)
 
 
 This workflowr site contains a few demonstrations of how the [DAAREM
