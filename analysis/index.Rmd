@@ -5,6 +5,13 @@ site: workflowr::wflow_site
 output: workflowr::wflow_html
 ---
 
+
+Compare turboEM and daarem on GMM and regression problems:
+
+* [GMM](fastEM_GMM.html)
+* [Linear Regression](fastEM_regression.html)
+
+
 This workflowr site contains a few demonstrations of how the [DAAREM
 method][daarem-paper] ("Damped Anderson acceleration with restarts for
 EM") can be used to substantially accelerate EM and other co-ordinate
