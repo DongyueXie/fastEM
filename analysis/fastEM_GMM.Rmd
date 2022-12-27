@@ -1,0 +1,81 @@
+---
+title: "Compare EM accelaration methods on GMM model"
+author: "DongyueXie"
+date: "2022-12-26"
+output: workflowr::wflow_html
+editor_options:
+  chunk_output_type: console
+---
+
+Compare daarem,squarem,qusi-newton,pem.
+
+## Set up environment
+
+Load some packages and function definitions used in the example below.
+
+```{r load-pkgs, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(cowplot)
+library(daarem)
+library(turboEM)
+source("../code/misc.R")
+source("../code/mixem.R")
+```
+
+## Load data set
+
+Load the 100,000 x 100 conditional likelihood matrix computed from a
+simulated data set.
+
+```{r load-data}
+load("../data/mixdata.RData")
+n <- nrow(L)
+m <- ncol(L)
+cat(sprintf("Loaded %d x %d data matrix.\n",n,m))
+```
+
+Set the initial estimate of the mixture proportions.
+
+```{r init-estimate}
+x0 <- rep(1/m,m)
+```
+## Run basic EM updates
+
+```{r fit-em}
+out <- system.time(fit1 <- mixem(L,x0,numiter = 200))
+f1  <- mixobjective(L,fit1$x)
+cat(sprintf("Computation took %0.2f seconds.\n",out["elapsed"]))
+cat(sprintf("Log-likelihood at EM estimate is %0.12f.\n",f1))
+```
+
+## Run accelerated EM
+
+```{r fit-daarem,eval=FALSE}
+out <- system.time(fit2 <- mixdaarem(L,x0,numiter = 200))
+f2  <- mixobjective(L,fit2$x)
+cat(sprintf("Computation took %0.2f seconds.\n",out["elapsed"]))
+cat(sprintf("Objective value at DAAREM estimate is %0.12f.\n",f2))
+```
+
+The maxiter in daarem and turboem seems to have different meanings. THe former one is the number of evaluations of fixptfn, the latter is not.
+
+```{r}
+out <- system.time(daarem_res <- daarem(x0,fixptfn=mixdaarem.update,objfn=mixdaarem.objective,L=L,e=1e-15,
+                    control = list(maxiter=200,order=10,tol=1e-8,convtype='objfn')))
+cat(sprintf("DAAREM took %0.2f seconds.\n",out["elapsed"]))
+cat(sprintf("DAAREM obj is %0.12f.\n",daarem_res$value.objfn))
+res = turboem(x0,fixptfn=mixdaarem.update,objfn=mixdaarem.objective,L=L,e=1e-15,method=c("squarem","pem","qn"),
+              control.run = list(maxiter=200,convtype='objfn',keep.objfval=TRUE,tol=1e-8))
+res
+```
+
+
+```{r}
+f <- mixobjective(L,x)
+plot(log(f-fit1$value),type='l',ylim=c(-2,10),ylab='distance to solution, log')
+lines(log(f-daarem_res$objfn.track),col=2)
+lines(log(f-res$trace.objfval[[1]]$trace),col=3)
+lines(log(f-c(mixobjective(L,x0),res$trace.objfval[[2]]$trace)),col=4)
+lines(log(f-c(mixobjective(L,x0),res$trace.objfval[[3]]$trace)),col=5)
+legend('topright',c('em','daarem','squarem','pem','qn'),lty=c(1,1,1,1,1),col=1:5)
+```
