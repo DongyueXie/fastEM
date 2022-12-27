@@ -1,0 +1,151 @@
+---
+title: "Compare EM accelaration methods on linear model, estimate prior"
+date: 
+site: workflowr::wflow_site
+output: workflowr::wflow_html
+---
+
+ 
+```{r knitr, echo=FALSE}
+knitr::opts_chunk$set(comment = "#",results = "hold",collapse = TRUE,
+                      fig.align = "center")
+```
+
+Compared to [previous](fastEM_regression.html), here we also estimate the prior weights w.
+
+## Analysis settings
+
+These variables specify how the data are generated: `n` is the number
+of simulated samples, `p` is the number of simulated predictors, `na`
+is the number of simulated predictors that have a nonzero effect, `se`
+is the variance of the residual.
+
+```{r sim-settings}
+n  <- 200 
+p  <- 500
+na <- 10
+se <- 4
+```
+
+This specifies the prior on the regression coefficients: it is normal
+with zero mean and variance `s0`.
+
+```{r ridge-settings}
+s0 <- 1/se
+```
+
+## Set up environment
+
+Load some packages and function definitions used in the example below.
+
+```{r load-pkgs, warning=FALSE, message=FALSE}
+library(MASS)
+library(daarem)
+library(ggplot2)
+library(cowplot)
+library(turboEM)
+theme_set(theme_cowplot())
+source("../code/misc.R")
+source("../code/datasim.R")
+source("../code/mr_ash_prior.R")
+```
+
+Initialize the sequence of pseudorandom numbers.
+
+```{r set-seed}
+set.seed(1)
+```
+
+## Simulate a data set
+
+Simulate predictors with "decaying" correlations.
+
+```{r sim-x}
+X <- simulate_predictors_decaying_corr(n,p,s = 0.5)
+X <- scale(X,center = TRUE,scale = FALSE)
+```
+
+Generate additive effects for the markers so that exactly `na` of them have
+a nonzero effect on the trait.
+
+```{r sim-beta}
+i    <- sample(p,na)
+b    <- rep(0,p)
+b[i] <- rnorm(na)
+```
+
+Simulate the continuous outcomes, and center them.
+
+```{r sim-y}
+y <- drop(X %*% b + sqrt(se)*rnorm(n))
+y <- y - mean(y)
+```
+
+
+## Linear regression with mixture-of-normals priors
+
+Next, we consider a less simple case in which the regression
+coefficients are independently and identically drawn from mixture of
+zero-centered normals; this can be seen as a multivariate extension to
+the [adaptive shrinkage model][adaptive-shrinkage-paper], so we call
+this "multivariate regression adaptive shrinkage" (mr-ash). Although
+posterior computations with this model are more difficult than with
+ridge regression, we can nonetheless obtain simple co-ordinate ascent
+updates for computing posterior expectations of the coefficients if we
+introduce a *variational approximation* to the posterior
+distribution. The full derivation is omitted here; see the code in the
+`mr_ash_update` function for details. (Note that the co-ordinate
+ascent updates, unlike the ridge regression updates, are only
+guaranteed to recover a *local maximum* of the objective function
+being optimized.)
+
+These two variables specify the variances and mixture weights for the
+mixture-of-normals priors. Here we illustrate mr-ash with a prior
+that is a mixture of three normals.
+
+```{r mr-ash-settings}
+b0 <- rep(0,p)
+s0 <- c(0.1,1,10)^2/se
+w  <- c(0.5,0.25,0.25)
+k =length(w)
+```
+
+## Run mr-ash co-ordinate ascent updates
+
+Fit the mr-ash model by running 100 iterations of the basic
+co-ordinate ascent updates. 
+
+```{r fit-mr-ash}
+out <- system.time(fit3 <- mr_ash(X,y,b0,se,s0,w,numiter = 100))
+cat(sprintf("Computation took %0.2f seconds.\n",out["elapsed"]))
+fit3$value
+```
+
+## Run accelerated mr-ash co-ordinate ascent updates
+
+```{r}
+out <- system.time(daarem_res <- daarem(c(b0,w),fixptfn=fastEM_mr_ash_update,objfn=fastEM_mr_ash_objective,
+                                        X=X,y=y,s=se,s0=s0,
+                                        control = list(maxiter = 100,order = 10,tol = 0)))
+cat(sprintf("daare took %0.2f seconds.\n",out["elapsed"]))
+daarem_res$objfn.track
+
+res = turboem(c(b0,w),fixptfn=fastEM_mr_ash_update,objfn=fastEM_mr_ash_objective,
+                                        X=X,y=y,s=se,s0=s0,method=c("squarem","pem","qn"),
+              control.run = list(maxiter=100,convtype='objfn',keep.objfval=TRUE,tol=0))
+res
+```
+
+```{r}
+f    <- max(c(fit3$value,daarem_res$objfn.track)) + 1e-8
+plot(log(f-fit3$value),type='l',ylim=c(-20,6),ylab='distance to solution, log')
+lines(log(f-daarem_res$objfn.track),col=2)
+lines(log(f-res$trace.objfval[[1]]$trace),col=3)
+lines(log(f-c(fit3$value[1],res$trace.objfval[[2]]$trace)),col=4)
+lines(log(f-c(fit3$value[1],res$trace.objfval[[3]]$trace)),col=5)
+legend('topright',c('em','daarem','squarem','pem','qn'),lty=c(1,1,1,1,1),col=1:5)
+```
+
+
+[daarem-paper]: https://doi.org/10.1080/10618600.2019.1594835
+[adaptive-shrinkage-paper]: https://doi.org/10.1093/biostatistics/kxw041
